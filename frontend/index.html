@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Agent - Natural Language Database Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <<body>
+    <div x-data="sqlAgent()" class="container">
+        <div class="header">
+            <h1>SQL Agent</h1>
+            <p>Natural Language Database Interface with Human-in-the-Loop Approval</p>
+        </div>
+
+        <div class="main-grid">
+            <!-- Main Query Interface -->
+            <div class="card">
+                <div class="query-section">
+                    <h3 style="margin-bottom: 16px; color: #495057;">Natural Language Query</h3>
+                    <textarea 
+                        x-model="query" 
+                        class="query-input" 
+                        placeholder="Type your database query in natural language...
+Examples:
+• Show all employees with salary greater than 50000
+• Find average salary by department 
+• List patients with their doctor names
+• Show recent orders from last month"
+                        :disabled="loading"
+                    ></textarea>
+                    
+                    <div class="controls">
+                        <button 
+                            @click="executeQuery()" 
+                            class="btn btn-primary" 
+                            :disabled="loading || !query.trim()"
+                        >
+                            <span x-show="!loading">Execute Query</span>
+                            <span x-show="loading" class="loading">
+                                <div class="spinner"></div>
+                                Processing...
+                            </span>
+                        </button>
+
+                        <select x-model="selectedDb" class="select">
+                            <option value="hr">HR Database</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="ecommerce">E-commerce</option>
+                            <option value="finance">Finance</option>
+                            <option value="education">Education</option>
+                        </select>
+
+                        <button @click="clearResults()" class="btn btn-secondary">Clear Results</button>
+                    </div>
+                </div>
+
+                <!-- Query Results -->
+                <div x-show="results.length > 0" class="results">
+                    <h3 style="margin-bottom: 16px; color: #495057;">Query Results</h3>
+                    
+                    <template x-for="(result, index) in results" :key="index">
+                        <div class="result-card">
+                            <div class="result-header">
+                                <div>
+                                    <span x-text="result.query" style="font-weight: 600;"></span>
+                                    <span 
+                                        class="status-badge"
+                                        :class="{
+                                            'status-executed': result.execution_status === 'executed_directly',
+                                            'status-pending': result.execution_status === 'requires_human_approval',
+                                            'status-error': result.status === 'error'
+                                        }"
+                                        x-text="result.execution_status || result.status"
+                                    ></span>
+                                </div>
+                            </div>
+
+                            <!-- SQL Display -->
+                            <div x-show="result.sql" class="sql-display" x-text="result.sql"></div>
+
+                            <!-- Error Message -->
+                            <div x-show="result.error" style="color: #dc3545; margin: 12px 0;" x-text="result.error"></div>
+
+                            <!-- Pending Approval Message -->
+                            <div x-show="result.pending_id" style="background: #fff3cd; padding: 12px; border-radius: 8px; margin: 12px 0;">
+                                <strong>⏳ Awaiting Approval</strong>
+                                <p style="margin: 4px 0;">Operation requires human approval. Pending ID: <span x-text="result.pending_id"></span></p>
+                                <p style="margin: 4px 0;" x-text="result.message"></p>
+                            </div>
+
+                            <!-- Data Results -->
+                            <div x-show="result.result && result.result.length > 0">
+                                <h4 style="margin: 16px 0 12px 0;">Data Results (<span x-text="result.result.length"></span> rows)</h4>
+                                <div style="overflow-x: auto;">
+                                    <table class="data-table">
+                                        <thead x-show="result.result && result.result.length > 0">
+                                            <tr>
+                                                <template x-for="column in Object.keys(result.result[0] || {})" :key="column">
+                                                    <th x-text="column"></th>
+                                                </template>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="row in result.result.slice(0, 100)" :key="Math.random()">
+                                                <tr>
+                                                    <template x-for="value in Object.values(row)" :key="Math.random()">
+                                                        <td x-text="value"></td>
+                                                    </template>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    <div x-show="result.result.length > 100" style="text-align: center; margin: 12px 0; color: #6c757d;">
+                                        Showing first 100 rows of <span x-text="result.result.length"></span> total results
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Metadata -->
+                            <div x-show="result.metadata" class="metadata-section">
+                                <h4 style="margin-bottom: 8px;">Query Metadata</h4>
+                                
+                                <div x-show="result.metadata.business_hints && result.metadata.business_hints.length > 0">
+                                    <strong>Business Insights:</strong>
+                                    <ul class="hints-list">
+                                        <template x-for="hint in result.metadata.business_hints" :key="hint">
+                                            <li x-text="hint"></li>
+                                        </template>
+                                    </ul>
+                                </div>
+
+                                <div x-show="result.metadata.conversation_context" style="color: #6c757d; margin: 8px 0;">
+                                    🔗 This query referenced previous conversation context
+                                </div>
+
+                                <div style="display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap;">
+                                    <span x-show="result.operation"><strong>Operation:</strong> <span x-text="result.operation"></span></span>
+                                    <span x-show="result.table"><strong>Table:</strong> <span x-text="result.table"></span></span>
+                                    <span x-show="result.target_db"><strong>Database:</strong> <span x-text="result.target_db"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Pending Operations -->
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="color: #495057;">Pending Operations</h3>
+                        <button @click="refreshPending()" class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px;">
+                            Refresh
+                        </button>
+                    </div>
+
+                    <div x-show="pendingOperations.length === 0" style="text-align: center; color: #6c757d; padding: 20px;">
+                        No pending operations
+                    </div>
+
+                    <template x-for="pending in pendingOperations.slice(0, 5)" :key="pending.id">
+                        <div class="pending-item">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <strong x-text="`${pending.operation} - ${pending.target_db}`"></strong>
+                                <span x-show="pending.risk_assessment && pending.risk_assessment.level" 
+                                      class="risk-indicator"
+                                      :class="pending.risk_assessment && pending.risk_assessment.level ? `risk-${pending.risk_assessment.level.toLowerCase()}` : ''"
+                                      x-text="pending.risk_assessment && pending.risk_assessment.level ? pending.risk_assessment.level : ''">
+                                </span>
+                            </div>
+                            
+                            <div style="font-size: 12px; color: #6c757d; margin-bottom: 8px;" x-text="pending.metadata?.text"></div>
+                            
+                            <div style="font-family: monospace; font-size: 11px; background: #f8f9fa; padding: 8px; border-radius: 4px; margin-bottom: 8px;" x-text="pending.sql ? pending.sql.substring(0, 100) + (pending.sql.length > 100 ? '...' : '') : ''"></div>
+                            
+                            <div class="pending-actions">
+                                <button @click="approvePending(pending.id)" class="btn-approve">✓ Approve</button>
+                                <button @click="rejectPending(pending.id)" class="btn-reject">✗ Reject</button>
+                                <button @click="viewPendingDetails(pending.id)" class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px;">Details</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Database Stats -->
+                <div class="card">
+                    <h3 style="margin-bottom: 16px; color: #495057;">Database Statistics</h3>
+                    <div x-show="!dbStats" style="text-align: center; color: #6c757d;">
+                        <button @click="loadDatabaseStats()" class="btn btn-secondary">Load Stats</button>
+                    </div>
+                    
+                    <div x-show="dbStats">
+                        <template x-for="db in dbStats" :key="db.name">
+                            <div style="margin-bottom: 12px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                                <div style="font-weight: 600; margin-bottom: 4px;" x-text="db.name ? db.name.toUpperCase() : ''"></div>
+                                <div style="font-size: 14px; color: #6c757d;">
+                                    Status: <span x-text="db.status"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Grid -->
+        <div class="bottom-grid">
+            <!-- Conversation History -->
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="color: #495057;">Conversation History</h3>
+                    <button @click="clearConversationHistory()" class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px;">
+                        Clear History
+                    </button>
+                </div>
+                
+                <div class="conversation-history">
+                    <div x-show="conversationHistory.length === 0" style="text-align: center; color: #6c757d; padding: 20px;">
+                        No conversation history
+                    </div>
+                    
+                    <template x-for="item in conversationHistory.slice().reverse()" :key="item.timestamp">
+                        <div class="history-item">
+                            <div class="history-query" x-text="item.query"></div>
+                            <div class="history-sql" x-text="item.result && item.result.sql ? item.result.sql : 'No SQL generated'"></div>
+                            <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;" x-text="new Date(item.timestamp).toLocaleString()"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="card">
+                <h3 style="margin-bottom: 16px; color: #495057;">System Status</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div style="text-align: center; padding: 16px; background: #e8f5e8; border-radius: 8px;">
+                        <div style="font-size: 24px; font-weight: 700; color: #28a745;" x-text="systemStats.totalQueries || 0"></div>
+                        <div style="font-size: 14px; color: #6c757d;">Total Queries</div>
+                    </div>
+                    
+                    <div style="text-align: center; padding: 16px; background: #fff3cd; border-radius: 8px;">
+                        <div style="font-size: 24px; font-weight: 700; color: #856404;" x-text="systemStats.pendingCount || 0"></div>
+                        <div style="font-size: 14px; color: #6c757d;">Pending Approval</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px;">
+                    <h4 style="margin-bottom: 8px;">Quick Actions</h4>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button @click="runBenchmark()" class="btn btn-secondary" style="font-size: 12px;">Run Benchmark</button>
+                        <button @click="initializeDatabases()" class="btn btn-secondary" style="font-size: 12px;">Init DBs</button>
+                        <button @click="checkHealth()" class="btn btn-secondary" style="font-size: 12px;">Health Check</button>
+                    </div>
+                </div>
+
+                <div x-show="systemMessage" style="margin-top: 12px; padding: 12px; background: #d1ecf1; border-radius: 8px; font-size: 14px;" x-text="systemMessage"></div>
+            </div>
+        </div>
+
+        <!-- Pending Details Modal -->
+        <div x-show="pendingDetails" x-transition class="modal-backdrop" @click="pendingDetails = null">
+            <div class="modal-content" @click.stop>
+                <div class="modal-header">
+                    <h3 style="font-size: 1.25rem; font-weight: 700;">Pending Operation Details</h3>
+                    <button @click="pendingDetails = null" class="modal-close">&times;</button>
+                </div>
+                
+                <div x-show="pendingDetails">
+                    <div style="margin-bottom: 16px;">
+                        <strong>Operation:</strong> <span x-text="pendingDetails.operation"></span>
+                        <span style="margin-left: 8px;">
+                            <strong>Database:</strong> <span x-text="pendingDetails.target_db"></span>
+                        </span>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <strong>Original Query:</strong>
+                        <div style="margin-top: 8px; padding: 12px; background: #f8f9fa; border-radius: 8px;" x-text="pendingDetails.metadata?.text"></div>
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <strong>Generated SQL:</strong>
+                        <div style="margin-top: 8px; padding: 12px; background: #2d3748; color: white; border-radius: 8px; font-family: monospace; font-size: 14px;" x-text="pendingDetails.sql"></div>
+                    </div>
+                    
+                    <div x-show="pendingDetails.risk_assessment && pendingDetails.risk_assessment.level" style="margin-bottom: 16px;">
+                        <strong>Risk Assessment:</strong>
+                        <div style="margin-top: 8px;">
+                            <span class="risk-indicator" :class="pendingDetails.risk_assessment && pendingDetails.risk_assessment.level ? `risk-${pendingDetails.risk_assessment.level.toLowerCase()}` : ''" x-text="pendingDetails.risk_assessment && pendingDetails.risk_assessment.level ? pendingDetails.risk_assessment.level : ''"></span>
+                            <div style="margin-top: 8px; font-size: 14px; color: #6c757d;" x-text="pendingDetails.risk_assessment && pendingDetails.risk_assessment.recommendation ? pendingDetails.risk_assessment.recommendation : ''"></div>
+                            <div x-show="pendingDetails.risk_assessment && pendingDetails.risk_assessment.factors && pendingDetails.risk_assessment.factors.length > 0" style="margin-top: 8px;">
+                                <strong>Risk Factors:</strong>
+                                <ul style="list-style: disc; margin-left: 20px; font-size: 14px; color: #6c757d;">
+                                    <template x-for="factor in pendingDetails.risk_assessment.factors" :key="factor">
+                                        <li x-text="factor"></li>
+                                    </template>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button @click="approvePending(pendingDetails.id); pendingDetails = null" class="btn btn-primary">
+                            ✓ Approve & Execute
+                        </button>
+                        <button @click="rejectPending(pendingDetails.id); pendingDetails = null" class="btn" style="background: #dc3545; color: white;">
+                            ✗ Reject
+                        </button>
+                        <button @click="pendingDetails = null" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('sqlAgent', sqlAgent);
+        });
+    </script>
+</body>
+</html>

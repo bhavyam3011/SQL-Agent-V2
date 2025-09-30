@@ -1,0 +1,24 @@
+fastapi==0.117.1
+uvicorn==0.27.0
+pydantic==2.5.3
+python-dotenv==1.0.0
+
+# LangChain and LangGraph
+langchain
+langgraph
+langchain-core
+
+
+googleapis-common-protos==1.70.0
+# Existing dependencies
+
+
+# Optional but recommended
+langsmith==0.1.17  # For debugging LangGraph workflows
+google-ai-generativelanguage==0.6.15
+google-api-core==2.25.1
+google-api-python-client==2.183.0
+google-auth==2.40.3
+google-auth-httplib2==0.2.0
+google-genai==1.39.1
+google-generativeai==0.8.5
