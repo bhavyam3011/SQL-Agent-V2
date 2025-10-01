@@ -2,7 +2,7 @@
 
 # SQL Agent – Natural Language Database Interface (v2)
 # Using LangChain-Langgraph
-
+# v1 without Langgraph
 ## 📌 Overview
 
 This project implements a **natural-language to SQL agent** that allows users to query and modify multiple mock databases using plain English.
